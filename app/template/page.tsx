@@ -129,6 +129,7 @@ export default function TemplateEditor() {
         const parsed = JSON.parse(saved);
         // Validate that it's an array
         if (Array.isArray(parsed)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setSavedTemplates(parsed);
         } else {
           console.error('Invalid templates format, resetting...');
