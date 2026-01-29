@@ -29,9 +29,24 @@ export default function Home() {
     setQrCodeUrl('');
 
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720 }
-      });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      
+      // Cari device yang namanya ada kata "DroidCam"
+      const droidCam = videoDevices.find(device => 
+        device.label.toLowerCase().includes('droidcam')
+      );
+
+      const constraints = {
+        video: {
+          // Jika ketemu DroidCam, kunci ID-nya. Jika tidak, pakai kamera apa saja.
+          deviceId: droidCam ? { exact: droidCam.deviceId } : undefined,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
@@ -278,7 +293,7 @@ export default function Home() {
                   ref={videoRef}
                   autoPlay
                   playsInline
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover scale-x-[-1]"
                 />
                 {countdown !== null && countdown === 0 && (
                   <div className="absolute inset-0 bg-white animate-flash"></div>
