@@ -2,8 +2,32 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import QRCode from 'qrcode';
+import Link from 'next/link';
 
 type PhotoMode = '1' | '4' | null;
+
+interface BorderElement {
+  id: string;
+  type: 'image' | 'star';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  opacity: number;
+  src?: string;
+  color?: string;
+  points?: number;
+}
+
+interface Template {
+  id: string;
+  name: string;
+  backgroundColor: string;
+  elements: BorderElement[];
+  layoutType?: '1' | '4';
+  createdAt: number;
+}
 
 export default function Home() {
   const [mode, setMode] = useState<PhotoMode>(null);
@@ -14,10 +38,19 @@ export default function Home() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [finalImage, setFinalImage] = useState<string>('');
+  const [activeTemplate, setActiveTemplate] = useState<Template | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load active template from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('activeTemplate');
+    if (saved) {
+      setActiveTemplate(JSON.parse(saved));
+    }
+  }, []);
 
   const startCamera = useCallback(async (selectedMode: PhotoMode) => {
     if (selectedMode === null) return;
@@ -74,60 +107,145 @@ export default function Home() {
       const bottomPadding = 120; // Polaroid style - wider bottom
       const photoPadding = 15;
       
-      if (mode === '1') {
-        // Single photo with polaroid frame
-        const img = new Image();
-        img.onload = () => {
-          canvas.width = img.width + sidePadding * 2;
-          canvas.height = img.height + topPadding + bottomPadding;
-          
-          // White background
-          context.fillStyle = '#ffffff';
-          context.fillRect(0, 0, canvas.width, canvas.height);
-          
-          // Draw photo
-          context.drawImage(img, sidePadding, topPadding);
-          
-          resolve(canvas.toDataURL('image/png'));
-        };
-        img.src = photoList[0];
-      } else {
-        // 4 photos in vertical strip with polaroid frame
-        let loadedCount = 0;
-        const images: HTMLImageElement[] = [];
+      // Helper function to draw star
+      const drawStar = (ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, points: number, color: string) => {
+        ctx.beginPath();
+        ctx.fillStyle = color;
         
-        photoList.forEach((photo, index) => {
+        for (let i = 0; i < points * 2; i++) {
+          const r = i % 2 === 0 ? radius : radius / 2;
+          const angle = (i * Math.PI) / points - Math.PI / 2;
+          const x = cx + r * Math.cos(angle);
+          const y = cy + r * Math.sin(angle);
+          
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      // Draw template elements on border
+      const drawTemplateElements = async (canvasWidth: number, canvasHeight: number) => {
+        if (!activeTemplate || activeTemplate.elements.length === 0) return;
+
+        // Scale factors based on template's original dimensions
+        // Template editor uses 400x360 for single, 250x700 for strip
+        const templateWidth = activeTemplate.layoutType === '4' ? 250 : 400;
+        const templateHeight = activeTemplate.layoutType === '4' ? 700 : 360;
+        
+        const scaleX = canvasWidth / templateWidth;
+        const scaleY = canvasHeight / templateHeight;
+        
+        for (const element of activeTemplate.elements) {
+          const scaledX = element.x * scaleX;
+          const scaledY = element.y * scaleY;
+          const scaledWidth = element.width * scaleX;
+          const scaledHeight = element.height * scaleY;
+
+          context.save();
+          context.globalAlpha = element.opacity;
+          context.translate(scaledX + scaledWidth / 2, scaledY + scaledHeight / 2);
+          context.rotate((element.rotation * Math.PI) / 180);
+
+          if (element.type === 'star') {
+            drawStar(context, 0, 0, scaledWidth / 2, element.points || 5, element.color || '#FFD700');
+          } else if (element.type === 'image' && element.src) {
+            const img = new Image();
+            await new Promise<void>((imgResolve) => {
+              img.onload = () => {
+                context.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+                imgResolve();
+              };
+              img.onerror = () => imgResolve();
+              img.src = element.src!;
+            });
+          }
+
+          context.restore();
+        }
+        
+        context.globalAlpha = 1.0;
+      };
+      
+      const processImages = async () => {
+        // Use template background color, or check if template layout matches mode
+        const useTemplate = activeTemplate && 
+          ((mode === '1' && activeTemplate.layoutType !== '4') || 
+           (mode === '4' && activeTemplate.layoutType === '4'));
+        const bgColor = useTemplate ? activeTemplate.backgroundColor : '#ffffff';
+        
+        if (mode === '1') {
+          // Single photo with polaroid frame
           const img = new Image();
-          img.onload = () => {
-            images[index] = img;
-            loadedCount++;
+          img.onload = async () => {
+            canvas.width = img.width + sidePadding * 2;
+            canvas.height = img.height + topPadding + bottomPadding;
             
-            if (loadedCount === 4) {
-              // Calculate size for vertical layout
-              const photoWidth = images[0].width / 2.5;
-              const photoHeight = images[0].height / 2.5;
-              
-              canvas.width = photoWidth + sidePadding * 2;
-              canvas.height = (photoHeight * 4) + (photoPadding * 3) + topPadding + bottomPadding;
-              
-              // White background
-              context.fillStyle = '#ffffff';
-              context.fillRect(0, 0, canvas.width, canvas.height);
-              
-              // Draw 4 photos vertically
-              images.forEach((img, i) => {
-                const x = sidePadding;
-                const y = topPadding + (i * (photoHeight + photoPadding));
-                
-                context.drawImage(img, 0, 0, img.width, img.height, x, y, photoWidth, photoHeight);
-              });
-              
-              resolve(canvas.toDataURL('image/png'));
+            // Background color from template
+            context.fillStyle = bgColor;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw photo first
+            context.drawImage(img, sidePadding, topPadding);
+            
+            // Draw template elements on top (highest z-index) if template matches mode
+            if (activeTemplate && activeTemplate.layoutType !== '4') {
+              await drawTemplateElements(canvas.width, canvas.height);
             }
+            
+            resolve(canvas.toDataURL('image/png'));
           };
-          img.src = photo;
-        });
-      }
+          img.src = photoList[0];
+        } else {
+          // 4 photos in vertical strip with polaroid frame
+          let loadedCount = 0;
+          const images: HTMLImageElement[] = [];
+          
+          photoList.forEach((photo, index) => {
+            const img = new Image();
+            img.onload = async () => {
+              images[index] = img;
+              loadedCount++;
+              
+              if (loadedCount === 4) {
+                // Calculate size for vertical layout
+                const photoWidth = images[0].width / 2.5;
+                const photoHeight = images[0].height / 2.5;
+                
+                canvas.width = photoWidth + sidePadding * 2;
+                canvas.height = (photoHeight * 4) + (photoPadding * 3) + topPadding + bottomPadding;
+                
+                // Background color from template
+                context.fillStyle = bgColor;
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw 4 photos vertically
+                images.forEach((img, i) => {
+                  const x = sidePadding;
+                  const y = topPadding + (i * (photoHeight + photoPadding));
+                  
+                  context.drawImage(img, 0, 0, img.width, img.height, x, y, photoWidth, photoHeight);
+                });
+                
+                // Draw template elements on top (highest z-index) if template matches mode
+                if (activeTemplate && activeTemplate.layoutType === '4') {
+                  await drawTemplateElements(canvas.width, canvas.height);
+                }
+                
+                resolve(canvas.toDataURL('image/png'));
+              }
+            };
+            img.src = photo;
+          });
+        }
+      };
+      
+      processImages();
     });
   };
 
@@ -254,7 +372,19 @@ export default function Home() {
             <h2 className="text-3xl font-semibold text-center mb-10 text-white">
               Select Photo Mode
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-2xl mx-auto">
+            
+            {/* Active Template Info */}
+            {activeTemplate && (
+              <div className="mb-8 p-4 bg-green-500/20 rounded-xl border border-green-500/30 text-center">
+                <p className="text-green-300 text-sm">Active Template:</p>
+                <p className="text-white font-semibold">{activeTemplate.name}</p>
+                <p className="text-white/60 text-xs mt-1">
+                  Layout: {activeTemplate.layoutType === '4' ? '4 Photo Strip' : 'Single Photo'}
+                </p>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-2xl mx-auto mb-8">
               <button
                 onClick={() => startCamera('1')}
                 className="bg-white/20 backdrop-blur hover:bg-white/30 text-white rounded-xl p-12 text-2xl font-semibold transition-all transform hover:scale-105 shadow-xl border border-white/30"
@@ -269,6 +399,16 @@ export default function Home() {
                 <div className="text-5xl font-bold mb-4">Strip</div>
                 <div className="text-base font-normal opacity-80">4 Photos</div>
               </button>
+            </div>
+            
+            {/* Link to Template Editor */}
+            <div className="text-center">
+              <Link
+                href="/template"
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-8 py-4 rounded-xl font-semibold transition-all shadow-lg"
+              >
+                ✨ Create Border Template
+              </Link>
             </div>
           </div>
         )}
