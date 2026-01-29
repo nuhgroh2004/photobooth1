@@ -39,6 +39,8 @@ export default function Home() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [finalImage, setFinalImage] = useState<string>('');
   const [activeTemplate, setActiveTemplate] = useState<Template | null>(null);
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState<string>('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -46,10 +48,48 @@ export default function Home() {
 
   // Load active template from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('activeTemplate');
-    if (saved) {
-      setActiveTemplate(JSON.parse(saved));
+    try {
+      const saved = localStorage.getItem('activeTemplate');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Validate basic template structure
+        if (parsed && typeof parsed === 'object' && parsed.elements && Array.isArray(parsed.elements)) {
+          setActiveTemplate(parsed);
+        } else {
+          console.error('Invalid template format, clearing...');
+          localStorage.removeItem('activeTemplate');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading active template:', error);
+      localStorage.removeItem('activeTemplate');
+      setActiveTemplate(null);
     }
+  }, []);
+
+  // Load available cameras
+  useEffect(() => {
+    const loadCameras = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        setAvailableCameras(videoDevices);
+        
+        // Auto-select DroidCam if available, otherwise first camera
+        const droidCam = videoDevices.find(device => 
+          device.label.toLowerCase().includes('droidcam')
+        );
+        if (droidCam) {
+          setSelectedCamera(droidCam.deviceId);
+        } else if (videoDevices.length > 0) {
+          setSelectedCamera(videoDevices[0].deviceId);
+        }
+      } catch (error) {
+        console.error('Error loading cameras:', error);
+      }
+    };
+    
+    loadCameras();
   }, []);
 
   const startCamera = useCallback(async (selectedMode: PhotoMode) => {
@@ -62,18 +102,9 @@ export default function Home() {
     setQrCodeUrl('');
 
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(device => device.kind === 'videoinput');
-      
-      // Cari device yang namanya ada kata "DroidCam"
-      const droidCam = videoDevices.find(device => 
-        device.label.toLowerCase().includes('droidcam')
-      );
-
       const constraints = {
         video: {
-          // Jika ketemu DroidCam, kunci ID-nya. Jika tidak, pakai kamera apa saja.
-          deviceId: droidCam ? { exact: droidCam.deviceId } : undefined,
+          deviceId: selectedCamera ? { exact: selectedCamera } : undefined,
           width: { ideal: 1280 },
           height: { ideal: 720 }
         }
@@ -88,7 +119,7 @@ export default function Home() {
       console.error('Error accessing camera:', error);
       alert('Tidak dapat mengakses kamera. Pastikan izin kamera diberikan.');
     }
-  }, []);
+  }, [selectedCamera]);
 
   const startCountdown = useCallback(() => {
     if (isCapturing) return;
@@ -373,6 +404,26 @@ export default function Home() {
               Select Photo Mode
             </h2>
             
+            {/* Camera Selection */}
+            {availableCameras.length > 0 && (
+              <div className="mb-8 p-4 bg-blue-500/20 rounded-xl border border-blue-500/30">
+                <label className="text-white text-sm font-medium mb-2 block text-center">
+                  📹 Select Camera
+                </label>
+                <select
+                  value={selectedCamera}
+                  onChange={(e) => setSelectedCamera(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg bg-white/20 text-white border border-white/30 focus:outline-none focus:border-blue-500 text-center"
+                >
+                  {availableCameras.map((camera) => (
+                    <option key={camera.deviceId} value={camera.deviceId} className="bg-slate-800">
+                      {camera.label || `Camera ${camera.deviceId.substring(0, 8)}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
             {/* Active Template Info */}
             {activeTemplate && (
               <div className="mb-8 p-4 bg-green-500/20 rounded-xl border border-green-500/30 text-center">
@@ -421,6 +472,31 @@ export default function Home() {
                 <h2 className="text-2xl font-semibold text-white mb-2">
                   Photo {currentPhotoIndex + 1} of {mode === '1' ? '1' : '4'}
                 </h2>
+                
+                {/* Camera Selector in capture mode */}
+                {availableCameras.length > 1 && !isCapturing && (
+                  <div className="mb-4 max-w-md mx-auto">
+                    <select
+                      value={selectedCamera}
+                      onChange={(e) => {
+                        setSelectedCamera(e.target.value);
+                        // Restart camera with new selection
+                        if (stream) {
+                          stream.getTracks().forEach(track => track.stop());
+                        }
+                        startCamera(mode);
+                      }}
+                      className="w-full px-4 py-2 rounded-lg bg-white/20 text-white border border-white/30 focus:outline-none text-sm"
+                    >
+                      {availableCameras.map((camera) => (
+                        <option key={camera.deviceId} value={camera.deviceId} className="bg-slate-800">
+                          {camera.label || `Camera ${camera.deviceId.substring(0, 8)}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                
                 {isCapturing && countdown !== null && (
                   <div className="text-8xl font-bold text-white mt-8 animate-pulse">
                     {countdown > 0 ? countdown : 'Smile!'}

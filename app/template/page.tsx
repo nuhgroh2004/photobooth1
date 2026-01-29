@@ -123,11 +123,89 @@ export default function TemplateEditor() {
 
   // Load saved templates from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('photoboothTemplates');
-    if (saved) {
-      setSavedTemplates(JSON.parse(saved));
+    try {
+      const saved = localStorage.getItem('photoboothTemplates');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Validate that it's an array
+        if (Array.isArray(parsed)) {
+          setSavedTemplates(parsed);
+        } else {
+          console.error('Invalid templates format, resetting...');
+          localStorage.removeItem('photoboothTemplates');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading templates:', error);
+      // Clear corrupted data
+      localStorage.removeItem('photoboothTemplates');
+      setSavedTemplates([]);
     }
   }, []);
+
+  // Create default template for single photo
+  const createDefaultSingleTemplate = () => {
+    const template: Template = {
+      id: `template-single-default-${Date.now()}`,
+      name: 'Single Photo - Stars & Logo',
+      backgroundColor: '#FFB6C1',
+      layoutType: '1',
+      createdAt: Date.now(),
+      elements: [
+        // Corner stars
+        { id: 'star-1', type: 'star', x: 15, y: 15, width: 40, height: 40, rotation: -15, opacity: 0.9, color: '#FFD700', points: 5 },
+        { id: 'star-2', type: 'star', x: 345, y: 15, width: 35, height: 35, rotation: 20, opacity: 0.85, color: '#FFA500', points: 5 },
+        { id: 'star-3', type: 'star', x: 20, y: 205, width: 30, height: 30, rotation: 45, opacity: 0.8, color: '#FF6B6B', points: 4 },
+        { id: 'star-4', type: 'star', x: 350, y: 210, width: 32, height: 32, rotation: -30, opacity: 0.87, color: '#4ECDC4', points: 5 },
+        // Bottom border decorations
+        { id: 'star-5', type: 'star', x: 50, y: 270, width: 38, height: 38, rotation: 10, opacity: 0.9, color: '#FFD700', points: 5 },
+        { id: 'star-6', type: 'star', x: 180, y: 285, width: 42, height: 42, rotation: -20, opacity: 0.95, color: '#FFA500', points: 5 },
+        { id: 'star-7', type: 'star', x: 310, y: 275, width: 36, height: 36, rotation: 25, opacity: 0.88, color: '#FF6B6B', points: 4 },
+        { id: 'star-8', type: 'star', x: 120, y: 320, width: 28, height: 28, rotation: -10, opacity: 0.75, color: '#45B7D1', points: 5 },
+        { id: 'star-9', type: 'star', x: 250, y: 315, width: 30, height: 30, rotation: 35, opacity: 0.8, color: '#96CEB4', points: 4 },
+      ],
+    };
+    
+    const newTemplates = [...savedTemplates, template];
+    setSavedTemplates(newTemplates);
+    localStorage.setItem('photoboothTemplates', JSON.stringify(newTemplates));
+    localStorage.setItem('activeTemplate', JSON.stringify(template));
+    alert('Default Single Photo template created and activated!');
+  };
+
+  // Create default template for 4 photo strip
+  const createDefaultStripTemplate = () => {
+    const template: Template = {
+      id: `template-strip-default-${Date.now()}`,
+      name: '4 Photo Strip - Colorful Stars',
+      backgroundColor: '#87CEEB',
+      layoutType: '4',
+      createdAt: Date.now(),
+      elements: [
+        // Top border
+        { id: 'star-1', type: 'star', x: 30, y: 12, width: 28, height: 28, rotation: -15, opacity: 0.9, color: '#FFD700', points: 5 },
+        { id: 'star-2', type: 'star', x: 190, y: 15, width: 25, height: 25, rotation: 20, opacity: 0.85, color: '#FFA500', points: 5 },
+        // Left side
+        { id: 'star-3', type: 'star', x: 8, y: 150, width: 24, height: 24, rotation: 45, opacity: 0.8, color: '#FF6B6B', points: 4 },
+        { id: 'star-4', type: 'star', x: 12, y: 350, width: 26, height: 26, rotation: -30, opacity: 0.87, color: '#4ECDC4', points: 5 },
+        // Right side
+        { id: 'star-5', type: 'star', x: 218, y: 200, width: 22, height: 22, rotation: 10, opacity: 0.82, color: '#96CEB4', points: 4 },
+        { id: 'star-6', type: 'star', x: 215, y: 400, width: 24, height: 24, rotation: -20, opacity: 0.85, color: '#FFD700', points: 5 },
+        // Bottom border - more stars
+        { id: 'star-7', type: 'star', x: 30, y: 600, width: 35, height: 35, rotation: 25, opacity: 0.92, color: '#FFA500', points: 5 },
+        { id: 'star-8', type: 'star', x: 110, y: 615, width: 38, height: 38, rotation: -10, opacity: 0.95, color: '#FF6B6B', points: 5 },
+        { id: 'star-9', type: 'star', x: 185, y: 605, width: 32, height: 32, rotation: 35, opacity: 0.88, color: '#4ECDC4', points: 5 },
+        { id: 'star-10', type: 'star', x: 65, y: 655, width: 28, height: 28, rotation: -25, opacity: 0.8, color: '#45B7D1', points: 4 },
+        { id: 'star-11', type: 'star', x: 150, y: 660, width: 30, height: 30, rotation: 15, opacity: 0.85, color: '#96CEB4', points: 5 },
+      ],
+    };
+    
+    const newTemplates = [...savedTemplates, template];
+    setSavedTemplates(newTemplates);
+    localStorage.setItem('photoboothTemplates', JSON.stringify(newTemplates));
+    localStorage.setItem('activeTemplate', JSON.stringify(template));
+    alert('Default 4 Photo Strip template created and activated!');
+  };
 
   // Draw canvas
   const drawCanvas = useCallback(() => {
@@ -665,6 +743,28 @@ export default function TemplateEditor() {
                 </div>
               </div>
             )}
+
+            {/* Create Default Templates */}
+            <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
+              <h3 className="text-white font-semibold mb-3">Quick Start Templates</h3>
+              <div className="space-y-2">
+                <button
+                  onClick={createDefaultSingleTemplate}
+                  className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white px-4 py-3 rounded-lg font-medium transition-all text-sm"
+                >
+                  🌟 Create Single Photo Template
+                </button>
+                <button
+                  onClick={createDefaultStripTemplate}
+                  className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-4 py-3 rounded-lg font-medium transition-all text-sm"
+                >
+                  ✨ Create 4 Photo Strip Template
+                </button>
+              </div>
+              <p className="text-white/60 text-xs mt-2">
+                Click to create and activate a pre-designed template
+              </p>
+            </div>
           </div>
         </div>
       </div>
