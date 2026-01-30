@@ -291,12 +291,12 @@ export default function Home() {
     const combinedImage = await generateCombinedImage(finalPhotos);
     setFinalImage(combinedImage);
     
-    // Save to server and get ID
-    const imageId = await saveImage(combinedImage);
+    // Save to Cloudinary and get URL
+    const result = await saveImage(combinedImage);
     
-    // Generate QR code
-    const downloadUrl = `${window.location.origin}/download/${imageId}`;
-    const qrCode = await QRCode.toDataURL(downloadUrl);
+    // Generate QR code LANGSUNG ke URL Cloudinary (bukan ke halaman download)
+    // User scan QR -> langsung ke gambar Cloudinary -> bisa download/save
+    const qrCode = await QRCode.toDataURL(result.url);
     setQrCodeUrl(qrCode);
     
     setIsComplete(true);
@@ -348,7 +348,7 @@ export default function Home() {
     }
   }, [photos, currentPhotoIndex, mode, finishSession]);
 
-  const saveImage = async (imageData: string): Promise<string> => {
+  const saveImage = async (imageData: string): Promise<{ id: string; url: string }> => {
     try {
       const response = await fetch('/api/save-image', {
         method: 'POST',
@@ -356,10 +356,10 @@ export default function Home() {
         body: JSON.stringify({ image: imageData })
       });
       const data = await response.json();
-      return data.id;
+      return { id: data.id, url: data.url };
     } catch (error) {
       console.error('Error saving image:', error);
-      return 'error';
+      return { id: 'error', url: '' };
     }
   };
 

@@ -1,35 +1,35 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 export default function DownloadPage() {
-  const params = useParams();
-  const id = params.id as string;
-  const imageUrl = id ? `/uploads/${id}.png` : '';
-  const [imageError, setImageError] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const searchParams = useSearchParams();
+  const imageUrl = searchParams.get('url') || '';
+  const [imageError, setImageError] = useState(!imageUrl);
+  const [loading, setLoading] = useState(!!imageUrl);
 
   useEffect(() => {
-    if (imageUrl) {
-      // Preload image
-      const img = new Image();
-      img.onload = () => setLoading(false);
-      img.onerror = () => {
-        setImageError(true);
-        setLoading(false);
-      };
-      img.src = imageUrl;
-    }
+    if (!imageUrl) return;
+    
+    // Preload image
+    const img = new Image();
+    img.onload = () => setLoading(false);
+    img.onerror = () => {
+      setImageError(true);
+      setLoading(false);
+    };
+    img.src = imageUrl;
   }, [imageUrl]);
 
   const downloadImage = () => {
-    if (imageError) return;
+    if (imageError || !imageUrl) return;
     
     const link = document.createElement('a');
     link.href = imageUrl;
-    link.download = `photobooth-${id}.png`;
+    link.download = `photobooth-${Date.now()}.png`;
+    link.target = '_blank';
     link.click();
   };
 

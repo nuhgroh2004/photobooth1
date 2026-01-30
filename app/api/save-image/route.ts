@@ -1,31 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { v2 as cloudinary } from 'cloudinary';
+
+// Konfigurasi Cloudinary
+cloudinary.config({
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export async function POST(request: NextRequest) {
   try {
     const { image } = await request.json();
     
-    // Generate unique ID
+    // Generate unique ID untuk public_id
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
     
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    try {
-      await fs.mkdir(uploadsDir, { recursive: true });
-    } catch (error) {
-      // Directory might already exist
-    }
+    // Upload ke Cloudinary
+    const uploadResult = await cloudinary.uploader.upload(image, {
+      public_id: `photobooth/${id}`,
+      folder: 'photobooth',
+      resource_type: 'image',
+    });
     
-    // Save image
-    const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-    const filePath = path.join(uploadsDir, `${id}.png`);
-    await fs.writeFile(filePath, buffer);
-    
-    return NextResponse.json({ id });
+    // Return ID dan URL Cloudinary
+    return NextResponse.json({ 
+      id: uploadResult.public_id,
+      url: uploadResult.secure_url 
+    });
   } catch (error) {
-    console.error('Error saving image:', error);
-    return NextResponse.json({ error: 'Failed to save image' }, { status: 500 });
+    console.error('Error uploading to Cloudinary:', error);
+    return NextResponse.json({ error: 'Failed to upload image' }, { status: 500 });
   }
 }
